@@ -11,6 +11,7 @@ from app.scrapers.chainalysis_scraper import ChainanalysisScraper
 from app.scrapers.base_scraper import BaseScraper
 from app.models.threat_intel import ThreatIntelItem, RiskLevel
 from app.database.database import SessionLocal, ThreatIntelDB
+from app.services.protocol_classifier import protocol_classifier
 from app.utils.logger import logger
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -37,6 +38,9 @@ class ScraperManager:
             timeout=aiohttp.ClientTimeout(total=30),
             headers={"User-Agent": "DeFiGuard-OSINT-Bot/1.0"}
         )
+        
+        # Initialize protocol classifier
+        await protocol_classifier.initialize()
         
         # Initialize individual scrapers
         for scraper in self.scrapers.values():
@@ -138,7 +142,11 @@ class ScraperManager:
                 if existing:
                     # Update existing item if it's newer
                     if item.scraped_date > existing.scraped_date:
-                        for key, value in item.dict().items():
+                        # Convert Pydantic model to dict and handle URL conversion
+                        item_data = item.dict()
+                        item_data['source_url'] = str(item.source_url)  # Convert URL to string
+                        
+                        for key, value in item_data.items():
                             if key != "id" and value is not None:
                                 setattr(existing, key, value)
                         existing.scraped_date = datetime.utcnow()

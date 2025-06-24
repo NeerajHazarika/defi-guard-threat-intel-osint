@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, DateTime, Float, Boolean, Text, Integer, JSON
+from sqlalchemy import create_engine, Column, String, DateTime, Date, Float, Boolean, Text, Integer, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
@@ -35,7 +35,7 @@ class ThreatIntelDB(Base):
     risk_level = Column(String, nullable=False, index=True)
     source_url = Column(String, nullable=False, unique=True)
     source_name = Column(String, nullable=False, index=True)
-    published_date = Column(DateTime)
+    published_date = Column(Date)
     scraped_date = Column(DateTime, default=func.now())
     tags = Column(JSON)
     amount_lost = Column(Float)

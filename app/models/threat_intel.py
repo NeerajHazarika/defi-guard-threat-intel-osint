@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, HttpUrl
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
 
 class RiskLevel(str, Enum):
@@ -17,7 +17,7 @@ class ThreatIntelItem(BaseModel):
     risk_level: RiskLevel = Field(..., description="Risk level assessment")
     source_url: HttpUrl = Field(..., description="Source URL of the article/report")
     source_name: str = Field(..., description="Name of the source (e.g., Rekt, Chainalysis)")
-    published_date: Optional[datetime] = Field(None, description="Publication date")
+    published_date: Optional[date] = Field(None, description="Publication date")
     scraped_date: datetime = Field(default_factory=datetime.utcnow, description="Date when data was scraped")
     tags: List[str] = Field(default_factory=list, description="Related tags/keywords")
     amount_lost: Optional[float] = Field(None, description="Amount lost in USD (if applicable)")
@@ -29,7 +29,8 @@ class ThreatIntelItem(BaseModel):
 
     class Config:
         json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
+            datetime: lambda v: v.isoformat() if v else None,
+            date: lambda v: v.isoformat() if v else None
         }
 
 class ThreatIntelResponse(BaseModel):

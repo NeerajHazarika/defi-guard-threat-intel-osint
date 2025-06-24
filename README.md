@@ -5,8 +5,9 @@ A comprehensive threat intelligence API for DeFi protocols that scrapes and anal
 ## Features
 
 - **Multi-source scraping**: Automatically scrapes threat intelligence from Rekt News, Chainalysis, and other sources
+- **AI-powered protocol detection**: Uses OpenAI ChatGPT for accurate DeFi protocol identification and threat relevance assessment
+- **Smart filtering**: Only stores protocol-specific threat intelligence, filtering out generic articles
 - **Risk assessment**: Automatically categorizes threats by risk level (Low, Medium, High, Critical)
-- **Protocol detection**: Identifies affected DeFi protocols automatically
 - **Amount tracking**: Extracts and tracks financial losses from incidents
 - **RESTful API**: Clean API endpoints for easy integration
 - **Real-time data**: Background scraping with up-to-date threat intelligence
@@ -26,6 +27,8 @@ cd defi-guard-osint
 2. Copy environment variables:
 ```bash
 cp .env.example .env
+# Edit .env and add your OpenAI API key:
+# OPENAI_API_KEY=your_openai_api_key_here
 ```
 
 3. Start the services:
@@ -45,7 +48,7 @@ pip install -r requirements.txt
 2. Set up environment variables:
 ```bash
 cp .env.example .env
-# Edit .env with your configuration
+# Edit .env with your configuration, including OpenAI API key
 ```
 
 3. Initialize the database:
@@ -92,7 +95,7 @@ curl "http://localhost:8000/api/v1/threat-intel?protocol=uniswap&risk_level=high
       "risk_level": "high",
       "source_url": "https://rekt.news/uniswap-attack/",
       "source_name": "Rekt News",
-      "published_date": "2024-01-15T10:30:00Z",
+      "published_date": "2024-01-15",
       "amount_lost": 15000000.0,
       "attack_type": "flash_loan_attack",
       "blockchain": "Ethereum",
@@ -134,7 +137,7 @@ Each threat intelligence item contains:
 - **risk_level**: Risk assessment (low/medium/high/critical)
 - **source_url**: Original article/report URL
 - **source_name**: Source publication name
-- **published_date**: When the article was published
+- **published_date**: When the article was published (date only)
 - **scraped_date**: When we scraped the data
 - **amount_lost**: Financial loss in USD (if applicable)
 - **attack_type**: Type of attack (if applicable)
@@ -193,6 +196,7 @@ Each threat intelligence item contains:
 
 - `DATABASE_URL`: PostgreSQL connection string
 - `REDIS_URL`: Redis connection string (for caching)
+- `OPENAI_API_KEY`: OpenAI API key for protocol classification (required)
 - `SECRET_KEY`: API secret key
 - `DEBUG`: Debug mode (True/False)
 - `SCRAPER_DELAY`: Delay between requests (seconds)

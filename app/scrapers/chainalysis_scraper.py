@@ -1,11 +1,12 @@
 import re
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 from urllib.parse import urljoin
 import json
 
 from app.scrapers.base_scraper import BaseScraper
 from app.models.threat_intel import ThreatIntelItem, RiskLevel
+from app.services.protocol_classifier import protocol_classifier
 from app.utils.logger import logger
 
 class ChainanalysisScraper(BaseScraper):
@@ -110,18 +111,24 @@ class ChainanalysisScraper(BaseScraper):
             # Extract article data
             title = self._extract_title(soup)
             description = self._extract_description(soup)
-            published_date = self._extract_published_date(soup)
-            protocol_name = self.extract_protocol_name(f"{title} {description}")
-            amount_lost = self.extract_amount_lost(f"{title} {description}")
             
             if not title or not description:
                 logger.warning(f"Missing title or description for {url}")
                 return None
             
-            # Filter out non-DeFi content
-            if not self._is_defi_relevant(title, description):
-                logger.debug(f"Article not DeFi relevant: {title}")
+            # Use AI to classify protocol and check if it's relevant threat intelligence
+            threat_intel_result = await protocol_classifier.is_threat_intel_relevant(title, description)
+            
+            if not threat_intel_result['is_relevant']:
+                logger.info(f"Chainalysis article filtered out - {threat_intel_result['reason']}: {title[:50]}...")
                 return None
+            
+            # Get the AI-classified protocol name
+            protocol_name = threat_intel_result['protocol']
+            logger.info(f"Classified protocol: {protocol_name} for Chainalysis article: {title[:50]}...")
+            
+            published_date = self._extract_published_date(soup)
+            amount_lost = self.extract_amount_lost(f"{title} {description}")
             
             # Assess risk level (Chainalysis articles are typically analytical)
             risk_level = self.assess_risk_level(
@@ -139,7 +146,8 @@ class ChainanalysisScraper(BaseScraper):
                 "analysis_type": self._extract_analysis_type(description),
                 "data_source": "chainalysis",
                 "report_type": self._extract_report_type(title, description),
-                "geographical_focus": self._extract_geographical_focus(description)
+                "geographical_focus": self._extract_geographical_focus(description),
+                "ai_classification_confidence": threat_intel_result['confidence']
             }
             
             return ThreatIntelItem(
@@ -230,49 +238,126 @@ class ChainanalysisScraper(BaseScraper):
         
         return None
     
-    def _extract_published_date(self, soup) -> Optional[datetime]:
+    def _extract_published_date(self, soup) -> Optional[date]:
         """Extract published date from article"""
+        import re
+        from dateutil.parser import parse as date_parse
+        
+        # More comprehensive selectors for Chainalysis
         date_selectors = [
             'time[datetime]',
+            'time',
             '.published-date',
             '.post-date',
             '.entry-date',
-            '[class*="date"]'
+            '.article-date',
+            '.date',
+            '[class*="date"]',
+            '[class*="time"]',
+            '.post-meta time',
+            '.meta-date',
+            '.byline time',
+            '.blog-post-date'
         ]
         
         for selector in date_selectors:
-            element = soup.select_one(selector)
-            if element:
+            elements = soup.select(selector)
+            for element in elements:
                 # Try datetime attribute
                 datetime_attr = element.get('datetime')
                 if datetime_attr:
                     try:
-                        return datetime.fromisoformat(datetime_attr.replace('Z', '+00:00'))
-                    except:
-                        pass
+                        # Handle various ISO formats
+                        clean_datetime = datetime_attr.replace('Z', '+00:00')
+                        parsed_datetime = datetime.fromisoformat(clean_datetime)
+                        return parsed_datetime.date()  # Return only date component
+                    except Exception as e:
+                        logger.debug(f"Failed to parse datetime attribute '{datetime_attr}': {e}")
+                        try:
+                            parsed_datetime = date_parse(datetime_attr)
+                            return parsed_datetime.date()  # Return only date component
+                        except:
+                            pass
                 
                 # Try text content
                 date_text = element.get_text(strip=True)
-                if date_text:
+                if date_text and len(date_text) > 4:
                     try:
+                        # Clean the text
+                        date_text = re.sub(r'(Posted|Published|on|at|by|•|·)', '', date_text, flags=re.IGNORECASE).strip()
+                        date_text = re.sub(r'\s+', ' ', date_text)
+                        
+                        # Try dateutil parser first
+                        try:
+                            parsed_datetime = date_parse(date_text)
+                            return parsed_datetime.date()  # Return only date component
+                        except:
+                            pass
+                        
                         # Common date formats
                         formats = [
                             '%Y-%m-%d',
+                            '%Y-%m-%dT%H:%M:%S',
+                            '%Y-%m-%d %H:%M:%S',
                             '%B %d, %Y',
                             '%b %d, %Y',
                             '%d %B %Y',
                             '%d %b %Y',
-                            '%m/%d/%Y'
+                            '%m/%d/%Y',
+                            '%d/%m/%Y',
+                            '%Y/%m/%d',
+                            '%b %d %Y',
+                            '%B %d %Y'
                         ]
                         
                         for fmt in formats:
                             try:
-                                return datetime.strptime(date_text, fmt)
+                                parsed_datetime = datetime.strptime(date_text, fmt)
+                                return parsed_datetime.date()  # Return only date component
                             except:
                                 continue
+                    except Exception as e:
+                        logger.debug(f"Failed to parse date text '{date_text}': {e}")
+        
+        # Look for dates in meta tags
+        meta_selectors = [
+            'meta[property="article:published_time"]',
+            'meta[name="publishdate"]',
+            'meta[name="date"]',
+            'meta[property="og:updated_time"]'
+        ]
+        
+        for selector in meta_selectors:
+            element = soup.select_one(selector)
+            if element:
+                content = element.get('content')
+                if content:
+                    try:
+                        parsed_datetime = date_parse(content)
+                        return parsed_datetime.date()  # Return only date component
                     except:
                         pass
         
+        # Fallback: look for date patterns in the page
+        page_text = soup.get_text()
+        date_patterns = [
+            r'\b(\d{4})-(\d{2})-(\d{2})\b',
+            r'\b(\w+)\s+(\d{1,2}),?\s+(\d{4})\b',
+            r'\b(\d{1,2})\s+(\w+)\s+(\d{4})\b'
+        ]
+        
+        for pattern in date_patterns:
+            matches = re.findall(pattern, page_text)
+            for match in matches:
+                try:
+                    if len(match) == 3:
+                        date_str = ' '.join(match)
+                        parsed_datetime = date_parse(date_str)
+                        return parsed_datetime.date()  # Return only date component
+                except:
+                    continue
+        
+        logger.debug("No published date found for Chainalysis article")
         return None
     
     def _extract_analysis_type(self, text: str) -> Optional[str]:
