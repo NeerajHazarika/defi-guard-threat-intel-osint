@@ -267,22 +267,6 @@ Once the application is running, visit:
 - Health check endpoint at `/`
 - Statistics endpoint for monitoring data freshness
 
-## Security Considerations
-
-- Rate limiting on scraping requests
-- Input validation and sanitization
-- No sensitive data storage
-- CORS configuration for frontend integration
-- Environment-based configuration
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
 ## License
 
 MIT License - see LICENSE file for details.
@@ -290,16 +274,6 @@ MIT License - see LICENSE file for details.
 ## Support
 
 For issues and questions:
-- Create an issue on GitHub
+- Create an issue on GitHub  
 - Check the documentation at `/docs`
 - Review logs in the `logs/` directory
-
-## Roadmap
-
-- [ ] Add more threat intelligence sources
-- [ ] Implement real-time alerting
-- [ ] Add frontend dashboard
-- [ ] Machine learning for threat categorization
-- [ ] API rate limiting and authentication
-- [ ] Export capabilities (PDF, CSV)
-- [ ] Integration with security tools
